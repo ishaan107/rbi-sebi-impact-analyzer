@@ -1,0 +1,15 @@
+{
+  "description": "Manually verified ground truth for evaluating Diff Agent and Impact Agent. Fill in after collecting your real circular pairs.",
+  "cases": [
+    {
+      "doc_topic": "kyc",
+      "expected_changes": [
+        {
+          "topic": "example: video KYC eligibility",
+          "change_type": "modified",
+          "expected_impact_level": "high"
+        }
+      ]
+    }
+  ]
+}

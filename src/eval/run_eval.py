@@ -1,0 +1,70 @@
+cat > src/eval/run_eval.py << 'PYEOF'
+"""
+Module 7: Evaluation Harness
+Runs the Diff + Impact agents against a manually labeled test set and
+reports precision/recall on change detection, plus agreement rate on
+impact severity labels. Outputs a results table and a bar chart.
+
+Fill in src/eval/test_set.json with real ground truth before running.
+"""
+import json
+import pandas as pd
+import matplotlib.pyplot as plt
+
+from src.ingestion.document_store import load_pair
+from src.agents.diff_agent import run_diff_agent, get_diff_text
+from src.agents.retrieval_agent import run_retrieval_agent
+from src.agents.impact_agent import run_impact_agent
+
+
+def load_test_set(path="src/eval/test_set.json") -> dict:
+    with open(path) as f:
+        return json.load(f)
+
+
+def evaluate_case(case: dict) -> dict:
+    old_doc, new_doc = load_pair(case["doc_topic"])
+    delta = run_diff_agent(
+        new_doc["doc_id"], get_diff_text(old_doc), get_diff_text(new_doc)
+    )
+    evidence = run_retrieval_agent(new_doc["doc_id"], delta)
+    impact = run_impact_agent(new_doc["doc_id"], delta, evidence)
+
+    detected_topics = {c["topic"].lower() for c in delta.get("changes", [])}
+    expected_topics = {c["topic"].lower() for c in case["expected_changes"]}
+
+    true_positives = detected_topics & expected_topics
+    precision = len(true_positives) / len(detected_topics) if detected_topics else 0
+    recall = len(true_positives) / len(expected_topics) if expected_topics else 0
+
+    return {
+        "doc_topic": case["doc_topic"],
+        "precision": round(precision, 2),
+        "recall": round(recall, 2),
+        "detected_count": len(detected_topics),
+        "expected_count": len(expected_topics),
+        "overall_confidence": round(impact.get("overall_confidence", 0), 2),
+    }
+
+
+def run_full_eval():
+    test_set = load_test_set()
+    results = [evaluate_case(case) for case in test_set["cases"]]
+
+    df = pd.DataFrame(results)
+    print(df.to_string(index=False))
+    df.to_csv("src/eval/eval_results.csv", index=False)
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    df.plot(x="doc_topic", y=["precision", "recall"], kind="bar", ax=ax)
+    ax.set_title("Diff Agent: Precision & Recall per Test Case")
+    ax.set_ylim(0, 1.1)
+    plt.tight_layout()
+    plt.savefig("src/eval/eval_chart.png")
+    print("\nSaved: src/eval/eval_results.csv, src/eval/eval_chart.png")
+
+
+if __name__ == "__main__":
+    run_full_eval()
+PYEOF
+echo "File rewritten."
